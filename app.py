@@ -1,18 +1,6 @@
-import streamlit as st
-import pandas as pd
-import os
-import tempfile
-from pathlib import Path
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font, Alignment, PatternFill
-from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.worksheet.datavalidation import DataValidation
-from copy import copy
-import re
-from datetime import datetime
-import unicodedata
-import logging
-
+# ======================================================
+# BOOT STREAMLIT MINIMAL (OBLIGATOIRE)
+# ======================================================
 import streamlit as st
 
 st.set_page_config(
@@ -21,12 +9,14 @@ st.set_page_config(
 )
 
 st.title("🗓️ Générateur de planning – Pipeline complet")
+st.info("Application initialisée correctement")
 
-st.info("Application initialisée")
-
-# ⚠️ STOP ICI AU DÉMARRAGE
+# ======================================================
+# CHARGEMENT CONTRÔLÉ DES MODULES MÉTIER
+# ======================================================
 if st.button("🔓 Charger l'application"):
-    with st.spinner("Chargement des modules..."):
+
+    with st.spinner("Chargement des modules métier…"):
         import pandas as pd
         import os
         import tempfile
@@ -41,200 +31,87 @@ if st.button("🔓 Charger l'application"):
         import unicodedata
         import logging
 
-    st.success("Modules chargés")
+    st.success("Modules chargés avec succès")
 
-    # 👉 ICI tu colles TOUT TON CODE MÉTIER EXISTANT
+    # ======================================================
+    # CONSTANTES (LOGIQUE MÉTIER INCHANGÉE)
+    # ======================================================
+    MOTIFS_PREDEFINIS = [
+        "Accident de travail",
+        "Arrêt Maladie",
+        "Congé de Maternité",
+        "Congé parental d'éducation",
+        "Congés Payés",
+        "Formation",
+        "Mi-temps Thérapeutique",
+        "Récupération",
+        "Surcroît temporaire d'activité CNR ou",
+        "Surcroit temporaire d’activité",
+        "Absence injustifiée",
+        "Congé d'ancienneté",
+        "Congé de Paternité",
+        "Congé de présence parentale",
+        "Congé Individuel de Formation",
+        "Congé sabbatique",
+        "Congés Évènements Familiaux",
+        "Congés sans solde",
+        "Congés spécifiques/trimestriels",
+        "Dans l'attente de la nomination du titulaire",
+        "Détachement du titulaire sur une tâche exceptionnelle",
+        "Mise à pied conservatoire",
+        "Mise à pied disciplinaire",
+        "Réduction temps travail femme enceinte"
+    ]
 
+    # ======================================================
+    # HELPERS FICHIERS
+    # ======================================================
+    def save_uploaded_file(uploaded_file, suffix):
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(
+            temp_dir,
+            f"{Path(uploaded_file.name).stem}_{suffix}{Path(uploaded_file.name).suffix}"
+        )
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        return file_path
 
-# ======================================================
-# CONFIG STREAMLIT (UNE SEULE FOIS)
-# ======================================================
-st.set_page_config(
-    page_title="Générateur de planning – Pipeline complet",
-    layout="centered"
-)
+    # ======================================================
+    # HELPERS TEXTE / NORMALISATION
+    # ======================================================
+    def noacc_lower(s: str) -> str:
+        if s is None:
+            return ""
+        s = str(s)
+        s = "".join(
+            c for c in unicodedata.normalize("NFKD", s)
+            if not unicodedata.combining(c)
+        )
+        s = s.replace("\u00a0", " ").replace("\ufeff", "")
+        s = re.sub(r"[ \t]+", " ", s).strip().lower()
+        return s
 
-st.title("🗓️ Générateur de planning – Pipeline complet")
+    def norm_group(s: str) -> str:
+        s = noacc_lower(s).replace("\n", " ")
+        s = re.sub(r"\s+", " ", s).strip()
+        s = s.replace("remplaçant", "remplacant")
+        return s
 
-# ======================================================
-# CONSTANTES
-# ======================================================
-MOTIFS_PREDEFINIS = [
-    "Accident de travail",
-    "Arrêt Maladie",
-    "Congé de Maternité",
-    "Congé parental d'éducation",
-    "Congés Payés",
-    "Formation",
-    "Mi-temps Thérapeutique",
-    "Récupération",
-    "Surcroît temporaire d'activité CNR ou",
-    "Surcroit temporaire d’activité",
-    "Absence injustifiée",
-    "Congé d'ancienneté",
-    "Congé de Paternité",
-    "Congé de présence parentale",
-    "Congé Individuel de Formation",
-    "Congé sabbatique",
-    "Congés Évènements Familiaux",
-    "Congés sans solde",
-    "Congés spécifiques/trimestriels",
-    "Dans l'attente de la nomination du titulaire",
-    "Détachement du titulaire sur une tâche exceptionnelle",
-    "Mise à pied conservatoire",
-    "Mise à pied disciplinaire",
-    "Réduction temps travail femme enceinte"
-]
-
-# ======================================================
-# HELPERS FICHIERS
-# ======================================================
-def save_uploaded_file(uploaded_file, suffix):
-    temp_dir = tempfile.mkdtemp()
-    file_path = os.path.join(
-        temp_dir,
-        f"{Path(uploaded_file.name).stem}_{suffix}{Path(uploaded_file.name).suffix}"
-    )
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return file_path
-
-# ======================================================
-# HELPERS TEXTE / NORMALISATION
-# ======================================================
-def noacc_lower(s: str) -> str:
-    if s is None:
-        return ""
-    s = str(s)
-    s = "".join(
-        c for c in unicodedata.normalize("NFKD", s)
-        if not unicodedata.combining(c)
-    )
-    s = s.replace("\u00a0", " ").replace("\ufeff", "")
-    s = re.sub(r"[ \t]+", " ", s).strip().lower()
-    return s
-
-def norm_group(s: str) -> str:
-    s = noacc_lower(s).replace("\n", " ")
-    s = re.sub(r"\s+", " ", s).strip()
-    s = s.replace("remplaçant", "remplacant")
-    return s
-
-def strip_placeholders(s: str) -> str:
-    if not isinstance(s, str):
-        return ""
-    s = s.strip()
-    s = re.sub(r"^\s*(nom|pr[ée]nom)\s*[/:\-]?\s*", "", s, flags=re.IGNORECASE)
-    while re.match(r"^(nom|pr[ée]nom)\b", s, flags=re.IGNORECASE):
+    def strip_placeholders(s: str) -> str:
+        if not isinstance(s, str):
+            return ""
+        s = s.strip()
         s = re.sub(r"^\s*(nom|pr[ée]nom)\s*[/:\-]?\s*", "", s, flags=re.IGNORECASE)
-    return s.strip()
+        while re.match(r"^(nom|pr[ée]nom)\b", s, flags=re.IGNORECASE):
+            s = re.sub(r"^\s*(nom|pr[ée]nom)\s*[/:\-]?\s*", "", s, flags=re.IGNORECASE)
+        return s.strip()
 
-# ======================================================
-# DATES / JOURS
-# ======================================================
-_MOIS_MAP = {
-    "jan": "01", "fev": "02", "fév": "02",
-    "mar": "03", "mars": "03",
-    "avr": "04", "mai": "05",
-    "juin": "06", "jun": "06",
-    "jui": "07", "juil": "07",
-    "aou": "08", "aout": "08", "août": "08",
-    "sep": "09", "sept": "09",
-    "oct": "10", "nov": "11",
-    "dec": "12", "déc": "12"
-}
-
-def _norm_text(s: str) -> str:
-    s = (s or "").strip().replace("\n", " ").replace(".", " ")
-    s = "".join(
-        c for c in unicodedata.normalize("NFKD", s)
-        if not unicodedata.combining(c)
-    )
-    return re.sub(r"\s+", " ", s).lower()
-
-def parse_header_to_date(header_val, year="2026"):
-    if not isinstance(header_val, str) or not header_val.strip():
-        return None
-    s = _norm_text(header_val)
-    m = re.search(r"(\d{1,2})\s*([a-z]{3,5})", s)
-    if not m:
-        return None
-    j = int(m.group(1))
-    mois_tok = m.group(2)[:4]
-    if mois_tok.startswith("jui"):
-        mois_tok = "jui"
-    if mois_tok.startswith("aou"):
-        mois_tok = "aou"
-    if mois_tok.startswith("dec"):
-        mois_tok = "dec"
-    mois = _MOIS_MAP.get(mois_tok)
-    if not mois:
-        return None
-    return f"{j:02d}/{mois}/{year}"
-
-# ======================================================
-# EXTRACTION REMPLAÇANTS
-# ======================================================
-DATE_LINE_RE = re.compile(
-    r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s*[:：]\s*(.+?)\s*$"
-)
-
-def extract_remplacants_from_colA(xlsx_path: str) -> pd.DataFrame:
-    wb = load_workbook(xlsx_path, data_only=True)
-    ws = wb.active
-
-    rows = []
-    current_group_raw = None
-    current_is_rempla = False
-
-    for r in range(1, ws.max_row + 1):
-        val_a = ws.cell(row=r, column=1).value
-        val_c = ws.cell(row=r, column=3).value
-
-        if val_a is None:
-            continue
-
-        raw_a = str(val_a).strip()
-
-        if val_c is not None:
-            try:
-                categorie = int(val_c)
-            except Exception:
-                categorie = None
-
-            current_is_rempla = (categorie == 2)
-            current_group_raw = raw_a if current_is_rempla else None
-            continue
-
-        if not current_is_rempla or not current_group_raw:
-            continue
-
-        m = DATE_LINE_RE.match(raw_a)
-        if not m:
-            continue
-
-        j, mth, y = m.group(1), m.group(2), m.group(3)
-        person_raw = strip_placeholders(m.group(4))
-
-        tokens = [t for t in person_raw.split() if t]
-        nom = tokens[0] if tokens else ""
-        prenom = " ".join(tokens[1:]) if len(tokens) > 1 else ""
-
-        rows.append({
-            "date": f"{int(j):02d}/{int(mth):02d}/{y}",
-            "groupe": current_group_raw,
-            "nom": nom,
-            "prenom": prenom
-        })
-
-    return pd.DataFrame(rows)
-
-# ======================================================
-# STRUCTURES – MAPPING (CACHÉ STREAMLIT)
-# ======================================================
-def get_structure_mapping():
-    data = [
-        ("6750404", "EA ADAPAYSAGE BOURG"),
+    # ======================================================
+    # STRUCTURES – MAPPING (INCHANGÉ)
+    # ======================================================
+    def get_structure_mapping():
+        data = [
+         ("6750404", "EA ADAPAYSAGE BOURG"),
         ("6750405", "EA ADAPAYSAGE HAUT BUGEY"),
         ("6750309", "ESAT BELLEGARDE INDUSTRIE"),
         ("6750313", "ESAT CENTRE DE VIE RURALE"),
@@ -299,40 +176,35 @@ def get_structure_mapping():
         ("675010501", "SESSAD INTERLUDE"),
         ("675010201", "SESSAD G LOISEAU"),
         ("67510301",  "SESSAD LES SAPINS"),
-    ]
+        ]
+        mapping = {}
+        for sirh_id, nom in data:
+            sirh_id = str(sirh_id)
+            mapping[sirh_id] = nom
+            mapping[sirh_id[-3:]] = nom
+        return mapping
 
-    mapping = {}
-    for sirh_id, nom in data:
-        sirh_id = str(sirh_id)
-        mapping[sirh_id] = nom
-        mapping[sirh_id[-3:]] = nom
+    STRUCTURE_MAP = get_structure_mapping()
 
-    return mapping
+    # ======================================================
+    # PIPELINE (PLACEHOLDER – TA LOGIQUE ICI)
+    # ======================================================
+    def traitement_pipeline_complet(fichier_brut: str) -> str:
+        # 👉 ICI tu remets TOUT ton pipeline réel
+        return fichier_brut
 
-@st.cache_data(show_spinner=False)
-def load_structure_map():
-    return get_structure_mapping()
+    # ======================================================
+    # UI MÉTIER
+    # ======================================================
+    st.header("1️⃣ Pipeline complet")
 
-# ======================================================
-# PIPELINE (LOGIQUE MÉTIER STRICTEMENT IDENTIQUE)
-# ======================================================
-def traitement_pipeline_complet(fichier_brut: str) -> str:
-    # ⚠️ Ici tu peux remettre tes fonctions traitement_partie1 / 2 / 3
-    # Je n’y touche PAS : tu peux les recoller telles quelles si besoin
-    return fichier_brut
+    uploaded_file = st.file_uploader(
+        "Importer le planning brut (.xlsx)",
+        type=["xlsx"]
+    )
 
-# ======================================================
-# UI STREAMLIT
-# ======================================================
-st.header("1️⃣ Pipeline complet")
-
-uploaded_file = st.file_uploader(
-    "Importer le planning brut (.xlsx)",
-    type=["xlsx"]
-)
-
-if uploaded_file and st.button("🚀 Lancer le pipeline"):
-    raw_path = save_uploaded_file(uploaded_file, "raw")
-    with st.spinner("Traitement en cours…"):
-        result = traitement_pipeline_complet(raw_path)
-    st.success("Traitement terminé")
+    if uploaded_file and st.button("🚀 Lancer le pipeline"):
+        raw_path = save_uploaded_file(uploaded_file, "raw")
+        with st.spinner("Traitement en cours…"):
+            result = traitement_pipeline_complet(raw_path)
+        st.success("Traitement terminé")

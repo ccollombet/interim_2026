@@ -10,6 +10,7 @@ st.set_page_config(
 
 st.title("🗓️ Générateur de planning – Pipeline complet")
 st.info("Application initialisée correctement")
+st.stop()
 
 # ======================================================
 # CHARGEMENT CONTRÔLÉ DES MODULES MÉTIER

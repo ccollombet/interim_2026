@@ -13,6 +13,39 @@ from datetime import datetime
 import unicodedata
 import logging
 
+import streamlit as st
+
+st.set_page_config(
+    page_title="Générateur de planning – Pipeline complet",
+    layout="centered"
+)
+
+st.title("🗓️ Générateur de planning – Pipeline complet")
+
+st.info("Application initialisée")
+
+# ⚠️ STOP ICI AU DÉMARRAGE
+if st.button("🔓 Charger l'application"):
+    with st.spinner("Chargement des modules..."):
+        import pandas as pd
+        import os
+        import tempfile
+        from pathlib import Path
+        from openpyxl import load_workbook, Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.worksheet.table import Table, TableStyleInfo
+        from openpyxl.worksheet.datavalidation import DataValidation
+        from copy import copy
+        import re
+        from datetime import datetime
+        import unicodedata
+        import logging
+
+    st.success("Modules chargés")
+
+    # 👉 ICI tu colles TOUT TON CODE MÉTIER EXISTANT
+
+
 # ======================================================
 # CONFIG STREAMLIT (UNE SEULE FOIS)
 # ======================================================
